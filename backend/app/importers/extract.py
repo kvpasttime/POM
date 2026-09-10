@@ -30,8 +30,13 @@ def _clean(text: str) -> str:
 
 
 def extract_amount(text: str) -> tuple[float | None, bool]:
-    """提取金额。返回 (金额, 是否高可信)。优先"单价"邻域数字（样例：微信单价1350元）。"""
+    """提取金额。返回 (金额, 是否高可信)。优先"单价"邻域数字（样例：微信单价1350元）。
+
+    先剔除电话号码（1[3-9]\\d{9}），避免手机号被误判为金额。
+    """
     t = _clean(text)
+    t = re.sub(r"1[3-9]\d{9}", " ", t)
+    t = re.sub(r"0\d{2,3}-?\d{7,8}", " ", t)
     m = UNIT_PRICE_CTX.search(t)
     if m:
         try:
