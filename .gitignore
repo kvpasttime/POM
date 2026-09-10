@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# 数据库与本地数据（真实业务数据不入库！）
+*.db
+*.sqlite*
+backend/data/
+backend/tests/_test_data/
+backend/_dbg*
+
+# 历史样例 Excel：含真实业务数据（电话/价格），禁止提交
+fixtures/
+
+# opencode 工作区技能包（本地工具链，不属于项目本身）
+.agents/
+
+# playwright 快照
+.playwright-mcp/
+
+# 前端
+node_modules/
+frontend/dist/
+
+# 环境
+.env
+deploy/.env
+
+# IDE / 系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log

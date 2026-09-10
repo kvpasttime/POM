@@ -1,0 +1,15 @@
+# POM 后端镜像（生产使用 PostgreSQL）
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app ./app
+
+# 上传目录与备份目录由卷挂载
+RUN mkdir -p /data/uploads /data/backups
+
+EXPOSE 8000
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
