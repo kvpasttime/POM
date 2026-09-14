@@ -25,6 +25,13 @@ UNIT_PRICE_CTX = re.compile(r"(?:单价|价格|定价|报价|含税单价)\s*[:�
 PHONE_RE = re.compile(r"1[3-9]\d{9}|0\d{2,3}-?\d{7,8}")
 
 
+def is_price_context(text: str) -> bool:
+    """判断文本是否含价格语境（用于"备注串列写进价格列"的识别）"""
+    t = _clean(text)
+    keywords = ("单价", "报价", "定价", "价格", "含税", "不含税", "含运", "元", "块", "万", "微信")
+    return any(k in t for k in keywords)
+
+
 def _clean(text: str) -> str:
     return (text or "").strip()
 

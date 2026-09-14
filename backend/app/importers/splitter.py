@@ -14,8 +14,8 @@ from dataclasses import dataclass, field
 from app.importers.detect import find_template_date
 from app.importers.extract import (
     extract_amount, extract_channel, extract_phone, extract_tax_freight,
-    extract_vendor, is_no_price_text, normalize_supplier_key, split_material_desc,
-    to_number,
+    extract_vendor, is_no_price_text, is_price_context, normalize_supplier_key,
+    split_material_desc, to_number,
 )
 from app.importers.mapping import auto_map, normalize_header
 from app.importers.reader import SheetMatrix, parse_date_value
@@ -205,36 +205,83 @@ def _quote_from_remark(rp: RowParse) -> QuoteParse | None:
     # 备注语境严格化：仅当存在"单价"上下文或含税/含运语义时才提取（PRD 5.4 不强行转换）
     if not (confident or tax is not None or freight is not None):
         return None
+    # 备注里的联系方式 → 供应商电话（R-IMP-15 敏感字段）
+    phone = extract_phone(joined)
+    if phone and rp.status == OK:
+        rp.status = WARN
+        rp.reasons.append("检测到联系方式出现在备注列，已归入供应商信息（敏感字段按角色展示）")
     return QuoteParse(
         amount=amount, tax_included=tax, freight_included=freight,
         channel=extract_channel(joined), supplier_name=extract_vendor(joined),
+        supplier_phone=phone,
         status="auto_extracted" if confident else "needs_review",
         remark=joined, group_label="备注",
     )
 
 
 def _quote_from_mapped_columns(val, rp: RowParse) -> list[QuoteParse]:
-    """映射内的报价字段（模板 *含税单价 列等）→ 0..1 条报价"""
+    """映射内的报价字段（模板 *含税单价 列等）→ 0..1 条报价。
+
+    串列自愈（"价格列写了备注"场景）：
+    - 金额列非数值但内容含价格语境（单价/含税/含运/元）→ 按文本提取金额语义，
+      标记 needs_review 并给行级原因；原文仍保留在快照与报价备注中
+    """
     amount = to_number(val("amount"))
     delivery = parse_date_value(val("delivery_date"))
     remark = val("quote_remark")["raw"] or None
     supplier_txt = val("supplier_name")["raw"] or None
-    if amount is None and not supplier_txt and not remark:
+
+    tax = freight = channel = None
+    text_extracted = False
+    amount_cell_text = (val("amount")["raw"] or "").strip()
+    if amount is None and amount_cell_text and is_price_context(amount_cell_text):
+        extracted, confident = extract_amount(amount_cell_text)
+        if extracted is not None:
+            amount = extracted
+            tax, freight = extract_tax_freight(amount_cell_text)
+            channel = extract_channel(amount_cell_text)
+            text_extracted = True
+
+    # 报价备注列写了价格文本（"含税单价620元含运"）→ 同样按语境提取，标记待确认
+    if amount is None and remark and is_price_context(remark):
+        extracted, confident = extract_amount(remark)
+        if extracted is not None:
+            amount = extracted
+            tax, freight = extract_tax_freight(remark)
+            channel = extract_channel(remark)
+            text_extracted = True
+
+    if amount is None and not supplier_txt and not remark and not text_extracted:
         return []
     qp = QuoteParse(
         amount=amount,
-        tax_included=True if amount is not None else None,  # 模板列名"含税单价"语义
-        channel=extract_channel(remark or "") if remark else None,
+        tax_included=(True if amount is not None and not text_extracted else None),
+        freight_included=freight,
+        channel=channel or (extract_channel(remark or "") if remark else None),
         supplier_name=supplier_txt,
         remark=remark,
-        status="auto_extracted" if amount is not None else "needs_review",
+        status="needs_review",
     )
-    if delivery:
-        rp.requirement["delivery_date"] = delivery
-    if qp.status == "needs_review":
+    # 备注列/价格列文本里的联系方式 → 供应商电话（R-IMP-15 敏感字段）
+    phone = extract_phone((remark or "") + " " + amount_cell_text)
+    if phone:
+        qp.supplier_phone = phone
+        if "检测到联系方式出现在非联系列，已归入供应商信息（敏感字段按角色展示）" not in rp.reasons:
+            rp.reasons.append("检测到联系方式出现在非联系列，已归入供应商信息（敏感字段按角色展示）")
+        if rp.status == OK:
+            rp.status = WARN
+    if text_extracted:
+        rp.reasons.append("金额列为空但报价列文本含价格语义（疑似价格写在备注列），已提取金额并标记待确认，原文见快照")
+        if rp.status == OK:
+            rp.status = WARN
+    elif amount is not None:
+        qp.status = "auto_extracted"
+    elif supplier_txt or remark or qp.supplier_phone:
         rp.reasons.append("映射列存在供应商/备注但无有效金额，标记待核对")
         if rp.status == OK:
             rp.status = WARN
+    if delivery:
+        rp.requirement["delivery_date"] = delivery
     return [qp]
 
 
