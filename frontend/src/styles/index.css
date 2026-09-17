@@ -1,0 +1,110 @@
+/* ============ POM 设计令牌 & Element Plus 现代化覆写 ============ */
+:root {
+  /* 主色：靛蓝 */
+  --el-color-primary: #4f46e5;
+  --el-color-primary-light-3: #7c72ea;
+  --el-color-primary-light-5: #9d95f0;
+  --el-color-primary-light-7: #c2bdf6;
+  --el-color-primary-light-8: #d6d3f9;
+  --el-color-primary-light-9: #ebebfc;
+  --el-color-primary-dark-2: #3f38c7;
+
+  /* 中性色 */
+  --el-text-color-primary: #0f172a;
+  --el-text-color-regular: #334155;
+  --el-text-color-secondary: #64748b;
+  --el-border-color: #e2e8f0;
+  --el-border-color-light: #eef2f7;
+  --el-border-color-lighter: #f1f5f9;
+  --el-fill-color-light: #f8fafc;
+
+  /* 圆角体系 */
+  --el-border-radius-base: 8px;
+  --el-border-radius-small: 6px;
+  --el-border-radius-round: 999px;
+
+  --pom-bg: #f1f5f9;
+  --pom-sidebar-bg: #0f172a;
+  --pom-card-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
+  --pom-card-shadow-hover: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --pom-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'HarmonyOS Sans SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+}
+
+html, body, #app { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--pom-font);
+  background: var(--pom-bg);
+  color: var(--el-text-color-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- 卡片 ---------- */
+.el-card {
+  border-radius: 12px;
+  border: 1px solid #edf0f5;
+  box-shadow: var(--pom-card-shadow) !important;
+  transition: box-shadow 0.2s ease;
+}
+.el-card.is-hover-shadow:hover,
+.el-card.is-always-shadow:hover {
+  box-shadow: var(--pom-card-shadow-hover) !important;
+}
+.el-card__header { border-bottom: 1px solid #f1f5f9; }
+
+/* ---------- 表格 ---------- */
+.el-table {
+  --el-table-border-color: #f1f5f9;
+  --el-table-header-bg-color: #f8fafc;
+  --el-table-row-hover-bg-color: #f5f6ff;
+  border-radius: 10px;
+}
+.el-table th.el-table__cell {
+  background: var(--el-table-header-bg-color);
+  color: #475569;
+  font-weight: 600;
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+}
+.el-table .el-table__row { cursor: default; }
+
+/* ---------- 输入控件统一 ---------- */
+.el-input__wrapper,
+.el-select__wrapper,
+.el-textarea__inner,
+.el-input-number .el-input__wrapper {
+  border-radius: 8px;
+}
+.el-input__wrapper:hover,
+.el-select__wrapper:hover { box-shadow: 0 0 0 1px var(--el-color-primary-light-7) inset; }
+
+/* ---------- 按钮 ---------- */
+.el-button { border-radius: 8px; font-weight: 500; }
+.el-button--primary {
+  box-shadow: 0 1px 2px rgba(79, 70, 229, 0.35);
+}
+.el-button--primary:hover { transform: translateY(-1px); }
+.el-button--primary:active { transform: translateY(0); }
+.el-button.is-link { box-shadow: none; }
+
+/* ---------- 标签 ---------- */
+.el-tag { border-radius: 6px; font-weight: 500; }
+
+/* ---------- 弹窗/消息 ---------- */
+.el-dialog { border-radius: 14px; }
+.el-message { border-radius: 10px; }
+.el-message-box { border-radius: 14px; }
+
+/* ---------- 面包屑 ---------- */
+.app .el-breadcrumb { font-size: 13px; }
+
+/* ---------- 滚动条 ---------- */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------- 通用工具类 ---------- */
+.page-crumb { margin-bottom: 14px; }
+.mono { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; }

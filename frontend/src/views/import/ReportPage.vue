@@ -84,14 +84,15 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.crumb { margin-bottom: 12px; }
-.steps { margin-bottom: 16px; }
-.block { margin-bottom: 12px; }
-.cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-.stat { font-size: 30px; font-weight: 600; text-align: center; }
-.stat.success { color: #67c23a; } .stat.danger { color: #f56c6c; } .stat.warn { color: #e6a23c; }
-.stat-label { text-align: center; color: #909399; }
+.crumb { margin-bottom: 14px; }
+.steps { margin-bottom: 18px; }
+.block { margin-bottom: 14px; }
+.cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.cards :deep(.el-card__body) { padding: 18px 12px; }
+.stat { font-size: 34px; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
+.stat.success { color: #16a34a; } .stat.danger { color: #ef4444; } .stat.warn { color: #f59e0b; }
+.stat-label { text-align: center; color: #64748b; font-size: 13px; margin-top: 2px; }
 .row { display: flex; align-items: center; }
-.reason { font-size: 12px; color: #909399; }
+.reason { font-size: 12px; color: #94a3b8; }
 .bottom { display: flex; justify-content: space-between; }
 </style>

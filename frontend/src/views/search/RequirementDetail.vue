@@ -84,17 +84,18 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.crumb { margin-bottom: 12px; }
-.summary { margin-bottom: 12px; }
+.crumb { margin-bottom: 14px; }
+.summary { margin-bottom: 14px; }
+.summary :deep(.el-card__body) { padding: 18px 20px; }
 .summary-main { font-size: 16px; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
-.summary-main .name { font-weight: 600; font-size: 18px; }
-.sep { color: #c0c4cc; }
-.summary-tags { margin-top: 10px; display: flex; gap: 8px; }
+.summary-main .name { font-weight: 700; font-size: 20px; color: #0f172a; }
+.sep { color: #cbd5e1; }
+.summary-tags { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
 .sub { margin-top: 12px; }
-.raw-title { margin: 12px 0 6px; color: #606266; font-size: 13px; }
+.raw-title { margin: 12px 0 6px; color: #64748b; font-size: 13px; }
 .raw-cells {
-  background: #f8f8f8; border: 1px solid #ebeef5; border-radius: 4px;
-  padding: 10px; font-size: 12px; max-height: 260px; overflow: auto; white-space: pre-wrap;
+  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
+  padding: 12px; font-size: 12px; max-height: 260px; overflow: auto; white-space: pre-wrap;
   margin-bottom: 10px;
 }
 </style>

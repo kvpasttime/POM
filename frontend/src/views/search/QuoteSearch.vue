@@ -49,7 +49,7 @@
         <el-table-column prop="brand" label="品牌" width="90" />
         <el-table-column prop="supplier_name" label="供应商" min-width="130" show-overflow-tooltip />
         <el-table-column label="金额(元)" width="110" align="right">
-          <template #default="{ row }">{{ fmtAmount(row.amount) }}</template>
+          <template #default="{ row }"><span class="amount-cell">{{ fmtAmount(row.amount) }}</span></template>
         </el-table-column>
         <el-table-column label="含税/含运" width="90">
           <template #default="{ row }">
@@ -201,13 +201,16 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.crumb { margin-bottom: 12px; }
-.filter-card { margin-bottom: 12px; }
+.crumb { margin-bottom: 14px; }
+.filter-card { margin-bottom: 14px; }
+.filter-card :deep(.el-card__body) { padding: 14px 16px 6px; }
 .filter-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
 .filter-row:last-child { margin-bottom: 0; }
-.dash { color: #909399; }
-.chips { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
-.pager { margin-top: 12px; display: flex; justify-content: flex-end; }
-.empty-state { padding: 24px 0; }
-.applied { color: #909399; font-size: 13px; }
+.dash { color: #94a3b8; }
+.chips { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e2e8f0; display: flex; gap: 6px; flex-wrap: wrap; }
+.pager { margin-top: 14px; display: flex; justify-content: flex-end; }
+.empty-state { padding: 28px 0; }
+.applied { color: #94a3b8; font-size: 13px; }
+.amount-cell { font-variant-numeric: tabular-nums; font-weight: 600; color: #0f172a; }
+.src-cell { color: #64748b; font-size: 12px; }
 </style>

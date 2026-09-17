@@ -85,6 +85,18 @@ async function doUpload() {
 </script>
 
 <style scoped>
-.crumb { margin-bottom: 12px; }
-.steps { margin-bottom: 16px; }
+.crumb { margin-bottom: 14px; }
+.steps { margin-bottom: 18px; }
+:deep(.el-upload-dragger) {
+  border-radius: 14px;
+  padding: 34px 20px;
+  border: 1.5px dashed #c7d0dd;
+  background: #f8fafc;
+  transition: all 0.2s ease;
+}
+:deep(.el-upload-dragger:hover) {
+  border-color: var(--el-color-primary);
+  background: #eef2ff;
+}
+:deep(.el-upload-dragger .el-icon) { color: var(--el-color-primary); }
 </style>
