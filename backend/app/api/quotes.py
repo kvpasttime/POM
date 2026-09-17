@@ -65,11 +65,13 @@ def search_quotes(
     sortOrder: str = "desc",
     page: int = Query(1, ge=1),
     pageSize: int = Query(20, ge=1, le=100),
+    include_requirement: bool = Query(False, description="含无报价需求（方案A）"),
     user: SysUser = Depends(get_current_user),
     db: DbSession = Depends(get_db),
 ):
     if price_min is not None and price_max is not None and price_min > price_max:
         raise BizError(20401, "价格区间非法：最小值大于最大值")
+    words = [w.strip() for w in (keyword or "").split() if w.strip()]
     applied = {k: v for k, v in {
         "keyword": keyword, "date_from": date_from, "date_to": date_to,
         "supplier_id": supplier_id, "unit": unit, "status": status,
@@ -92,8 +94,7 @@ def search_quotes(
         if status:
             q = q.filter(Quote.status == status)
 
-    if keyword:
-        words = [w.strip() for w in keyword.split() if w.strip()]
+    if words:
         for w in words:
             like = f"%{w}%"
             conds = [
@@ -136,6 +137,8 @@ def search_quotes(
         s = it.supplier_ref
         result_items.append({
             "id": it.id,
+            "row_type": "quote",
+            "requirement_id": it.requirement_id,
             "material_name": m.name if m else None,
             "material_code": m.code if m else None,
             "spec_model": m.spec_model if m else None,
@@ -150,12 +153,77 @@ def search_quotes(
             "batch_id": it.import_batch_id,
             "source_summary": source_summary(db, it),
         })
+    # 报价专属筛选（供应商/价格/含税/含运/状态）不适用于需求行，存在时忽略需求补充
+    has_quote_only_filter = any(v not in (None, "", False) for v in (
+        supplier_id, price_min, price_max, tax_included, freight_included, status))
+    requirement_items = [] if (has_quote_only_filter or not include_requirement) else \
+        _search_requirement_items(db, words, date_from, date_to, unit)
+
     return ok({"total": total, "page": page, "pageSize": pageSize,
-               "items": result_items, "applied_filters": applied})
+               "items": result_items, "applied_filters": applied,
+               "requirement_items": requirement_items})
+
+
+def _search_requirement_items(db: DbSession, words: list[str],
+                              date_from: str | None, date_to: str | None,
+                              unit: str | None) -> list[dict]:
+    """方案A：查询"有物料+需求但无报价"的记录，供搜索页合并展示。
+
+    报价专属筛选（供应商/价格/含税/含运/状态）天然不适用于需求行，
+    由调用方决定是否忽略；这里只应用 keyword / 日期区间 / 使用单位。
+    """
+    no_quote = ~db.query(Quote.id).filter(
+        Quote.requirement_id == PurchaseRequirement.id,
+        Quote.status != "deleted").exists()
+    q = (db.query(PurchaseRequirement, Material)
+         .join(Material, PurchaseRequirement.material_id == Material.id)
+         .filter(no_quote))
+    if words:
+        for w in words:
+            like = f"%{w}%"
+            conds = [
+                Material.name.like(like), Material.code.like(like),
+                Material.spec_model.like(like), Material.tech_params.like(like),
+                Material.part_no.like(like), Material.material_text.like(like),
+                Material.brand.like(like), PurchaseRequirement.remark.like(like),
+                PurchaseRequirement.receiver.like(like),
+            ]
+            q = q.filter(or_(*conds))
+    if date_from:
+        q = q.filter(PurchaseRequirement.requirement_date >= date_from)
+    if date_to:
+        q = q.filter(PurchaseRequirement.requirement_date <= date_to)
+    if unit:
+        q = q.filter(PurchaseRequirement.unit.like(f"%{unit}%"))
+    rows = q.order_by(PurchaseRequirement.id.desc()).limit(200).all()
+    items = []
+    for req, m in rows:
+        items.append({
+            "requirement_id": req.id,
+            "row_type": "requirement",
+            "material_name": m.name,
+            "material_code": m.code,
+            "spec_model": m.spec_model,
+            "brand": m.brand,
+            "supplier_name": "待确认",
+            "amount": None,
+            "currency": "CNY",
+            "tax_included": None,
+            "freight_included": None,
+            "quote_date": str(req.requirement_date) if req.requirement_date else None,
+            "status": "no_quote",
+            "batch_id": None,
+            "source_summary": snapshot_summary(db, req.source_row_snapshot_id),
+        })
+    return items
 
 
 def source_summary(db: DbSession, quote: Quote) -> str:
-    snap = db.query(SourceRowSnapshot).filter(SourceRowSnapshot.id == quote.source_row_snapshot_id).first()
+    return snapshot_summary(db, quote.source_row_snapshot_id)
+
+
+def snapshot_summary(db: DbSession, snapshot_id: int) -> str:
+    snap = db.query(SourceRowSnapshot).filter(SourceRowSnapshot.id == snapshot_id).first()
     if snap is None:
         return "—"
     f = db.query(SourceFile).filter(SourceFile.id == snap.source_file_id).first()
@@ -247,6 +315,51 @@ def quote_detail(quote_id: int, user: SysUser = Depends(get_current_user),
                summary=f"查看报价 #{quote.id} 敏感字段: {'、'.join(masked)}",
                ip=None)
         db.commit()
+    return ok(data)
+
+
+@router.get("/requirements/{requirement_id}")
+def requirement_detail(requirement_id: int, user: SysUser = Depends(get_current_user),
+                       db: DbSession = Depends(get_db)):
+    """无报价需求详情（方案A：纯需求 Excel 导入后也能溯源查看）"""
+    req = db.query(PurchaseRequirement).filter(PurchaseRequirement.id == requirement_id).first()
+    if req is None:
+        raise BizError(20402, "记录不存在或已删除", http_status=404)
+    m = db.query(Material).filter(Material.id == req.material_id).first()
+    snap = db.query(SourceRowSnapshot).filter(SourceRowSnapshot.id == req.source_row_snapshot_id).first()
+    f = db.query(SourceFile).filter(SourceFile.id == snap.source_file_id).first() if snap else None
+    # 需求记录通过快照→文件→批次定位来源
+    batch = db.query(ImportBatch).filter(ImportBatch.id == f.batch_id).first() if f else None
+    uploader = None
+    if batch:
+        uploader = db.query(SysUser).filter(SysUser.id == batch.created_by).first()
+
+    data = {
+        "id": req.id,
+        "row_type": "requirement",
+        "material": ({
+            "code": m.code, "name": m.name, "category": m.category,
+            "spec_model": m.spec_model, "tech_params": m.tech_params,
+            "part_no": m.part_no, "material_text": m.material_text,
+            "brand": m.brand, "origin_type": m.origin_type, "unit": m.unit,
+            "name_raw": m.name_raw,
+        } if m else None),
+        "requirement": {
+            "quantity": float(req.quantity) if req.quantity is not None else None,
+            "unit": req.unit, "requirement_date": str(req.requirement_date) if req.requirement_date else None,
+            "receiver": req.receiver, "quote_row_no": req.quote_row_no, "remark": req.remark,
+        },
+        "source": ({
+            "file_id": f.id, "file_name": f.original_name,
+            "sha256_8": f.sha256[:8], "sheet_name": snap.sheet_name,
+            "row_no": snap.row_no, "batch_id": batch.id if batch else None,
+            "batch_no": f"BATCH-{batch.id:05d}" if batch else None,
+            "uploaded_by": uploader.display_name if uploader else None,
+            "uploaded_at": batch.created_at.isoformat() if batch and batch.created_at else None,
+            "raw_cells": snap.cells,
+        } if snap and f else None),
+        "no_quote": True,
+    }
     return ok(data)
 
 

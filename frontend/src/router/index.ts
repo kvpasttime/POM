@@ -11,6 +11,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'search', name: 'search', component: () => import('../views/search/QuoteSearch.vue') },
       { path: 'quotes/:id', name: 'quote-detail', component: () => import('../views/search/QuoteDetail.vue') },
       { path: 'quotes/:id/edit', name: 'quote-edit', component: () => import('../views/search/QuoteEdit.vue'), meta: { roles: ['maintainer', 'admin'] } },
+      { path: 'requirements/:id', name: 'requirement-detail', component: () => import('../views/search/RequirementDetail.vue') },
       { path: 'import', name: 'import', component: () => import('../views/import/UploadPage.vue'), meta: { roles: ['maintainer', 'admin'] } },
       { path: 'import/:batchId/map', name: 'import-map', component: () => import('../views/import/MapPreviewPage.vue'), meta: { roles: ['maintainer', 'admin'] } },
       { path: 'import/:batchId/report', name: 'import-report', component: () => import('../views/import/ReportPage.vue'), meta: { roles: ['maintainer', 'admin'] } },

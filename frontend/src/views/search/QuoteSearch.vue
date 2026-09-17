@@ -32,6 +32,7 @@
         <el-select v-model="filters.freight_included" placeholder="含运" clearable style="width: 100px" @change="doSearch">
           <el-option label="含运" :value="true" /><el-option label="不含运" :value="false" />
         </el-select>
+        <el-checkbox v-model="includeRequirement" @change="doSearch">含无报价需求</el-checkbox>
       </div>
       <div v-if="appliedChips.length" class="chips">
         <el-tag v-for="c in appliedChips" :key="c.key" closable size="small" @close="removeChip(c.key)">
@@ -52,7 +53,8 @@
         </el-table-column>
         <el-table-column label="含税/含运" width="90">
           <template #default="{ row }">
-            {{ yn(row.tax_included) }} / {{ yn(row.freight_included) }}
+            <span v-if="row.row_type === 'requirement'">— / —</span>
+            <span v-else>{{ yn(row.tax_included) }} / {{ yn(row.freight_included) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="状态" width="100">
@@ -104,6 +106,7 @@ const units = ref<string[]>([])
 const supplierOptionsList = ref<any[]>([])
 const supplierLoading = ref(false)
 const statusMap = QUOTE_STATUS_MAP
+const includeRequirement = ref(false)
 
 const filters = reactive<any>({
   keyword: (route.query.keyword as string) || '',
@@ -128,8 +131,8 @@ const appliedChips = computed(() => {
   return chips
 })
 
-const statusLabel = (s: string) => statusMap[s]?.label || s
-const statusTag = (s: string) => statusMap[s]?.tag || 'info'
+const statusLabel = (s: string) => statusMap[s]?.label || (s === 'no_quote' ? '无报价' : s)
+const statusTag = (s: string) => (s === 'no_quote' ? 'warning' : statusMap[s]?.tag || 'info')
 const yn = (v: boolean | null) => (v === true ? '是' : v === false ? '否' : '—')
 
 async function loadSuppliers(kw?: string) {
@@ -173,14 +176,21 @@ async function load() {
       ...filters,
       date_from: dateRange.value?.[0], date_to: dateRange.value?.[1],
       page: page.value, pageSize: pageSize.value,
+      include_requirement: includeRequirement.value,
     })
-    rows.value = data.items
+    rows.value = includeRequirement.value
+      ? [...data.items, ...(data.requirement_items || [])]
+      : data.items
     total.value = data.total
   } finally { loading.value = false }
 }
 
 function goDetail(row: any) {
-  router.push(`/quotes/${row.id}`)
+  if (row.row_type === 'requirement') {
+    router.push(`/requirements/${row.requirement_id}`)
+  } else {
+    router.push(`/quotes/${row.id}`)
+  }
 }
 
 onMounted(async () => {

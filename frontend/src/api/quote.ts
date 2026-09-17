@@ -15,6 +15,7 @@ export interface SearchParams {
   sortOrder?: string
   page?: number
   pageSize?: number
+  include_requirement?: boolean
 }
 
 export async function searchQuotes(params: SearchParams) {
@@ -24,6 +25,10 @@ export async function searchQuotes(params: SearchParams) {
     if (v !== undefined && v !== null && v !== '') clean[k] = v
   })
   return await http.get<never, any>('/quotes/search', { params: clean })
+}
+
+export async function requirementDetail(id: number | string) {
+  return await http.get<never, any>(`/requirements/${id}`)
 }
 
 export async function quoteDetail(id: number | string) {
