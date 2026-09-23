@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session as DbSession
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_admin, require_maintainer
 from app.core.response import BizError, ok
-from app.models.business import Quote
+from app.models.business import Quote, QuoteBreakdown
 from app.models.ops import QuoteRevision
 from app.models.user import SysUser
 from app.services.audit_service import record
@@ -18,7 +18,7 @@ router = APIRouter(tags=["maintenance"])
 EDITABLE_FIELDS = {
     "amount", "currency", "tax_included", "tax_rate", "freight_included",
     "available_qty", "delivery_date", "transport_mode", "quote_date",
-    "valid_until", "remark", "source_remark", "channel",
+    "valid_until", "remark", "source_remark", "channel", "quoter",
 }
 STATUS_VALUES = {"confirmed", "auto_extracted", "needs_review", "no_valid_price"}
 
@@ -43,6 +43,12 @@ class ReasonBody(BaseModel):
 class StatusBody(BaseModel):
     status: str
     reason: str = Field(min_length=1, max_length=512)
+
+
+class BreakdownBody(BaseModel):
+    store_name: str = Field(min_length=1, max_length=128)
+    amount: float | None = None
+    note: str | None = Field(default=None, max_length=512)
 
 
 def _add_revisions(db: DbSession, quote: Quote, fields: dict, reason: str, user: SysUser) -> list[str]:
@@ -155,3 +161,63 @@ def list_revisions(quote_id: int, page: int = Query(1, ge=1),
         "changed_by_name": users.get(r.changed_by),
         "changed_at": r.changed_at.isoformat() if r.changed_at else None,
     } for r in items]})
+
+
+# ---------- 报价构成明细（组合采购） ----------
+
+@router.post("/quotes/{quote_id}/breakdowns")
+def add_breakdown(quote_id: int, body: BreakdownBody, request: Request,
+                  user: SysUser = Depends(require_maintainer), db: DbSession = Depends(get_db)):
+    quote = _get_quote(db, quote_id)
+    total = db.query(QuoteBreakdown).filter(QuoteBreakdown.quote_id == quote_id).count()
+    if total >= 50:
+        raise BizError(40402, "构成明细数量已达上限（50 条）")
+    bd = QuoteBreakdown(quote_id=quote_id, store_name=body.store_name.strip(),
+                        amount=body.amount, note=body.note, created_by=user.id,
+                        status="needs_review")
+    db.add(bd)
+    db.flush()
+    record(db, "QUOTE_UPDATE", actor=user, object_type="quote", object_id=quote.id,
+           summary=f"报价 #{quote.id} 新增构成明细：{bd.store_name}",
+           ip=request.client.host if request.client else None)
+    db.commit()
+    return ok({"id": bd.id, "quote_id": quote_id})
+
+
+@router.patch("/quotes/{quote_id}/breakdowns/{bd_id}")
+def patch_breakdown(quote_id: int, bd_id: int, body: BreakdownBody,
+                    request: Request, user: SysUser = Depends(require_maintainer),
+                    db: DbSession = Depends(get_db)):
+    bd = db.query(QuoteBreakdown).filter(
+        QuoteBreakdown.id == bd_id, QuoteBreakdown.quote_id == quote_id).first()
+    if bd is None:
+        raise BizError(40401, "明细不存在", http_status=404)
+    old = f"{bd.store_name}|{bd.amount}|{bd.note}"
+    bd.store_name = body.store_name.strip()
+    bd.amount = body.amount
+    bd.note = body.note
+    bd.status = "confirmed"
+    db.flush()
+    record(db, "QUOTE_UPDATE", actor=user, object_type="quote", object_id=quote_id,
+           summary=f"报价 #{quote_id} 明细 #{bd_id} 修改 {old} → {bd.store_name}|{bd.amount}|{bd.note}",
+           ip=request.client.host if request.client else None)
+    db.commit()
+    return ok({"id": bd.id, "store_name": bd.store_name,
+               "amount": float(bd.amount) if bd.amount is not None else None,
+               "note": bd.note, "status": bd.status})
+
+
+@router.delete("/quotes/{quote_id}/breakdowns/{bd_id}")
+def delete_breakdown(quote_id: int, bd_id: int, request: Request,
+                     user: SysUser = Depends(require_maintainer), db: DbSession = Depends(get_db)):
+    _get_quote(db, quote_id)
+    bd = db.query(QuoteBreakdown).filter(
+        QuoteBreakdown.id == bd_id, QuoteBreakdown.quote_id == quote_id).first()
+    if bd is None:
+        raise BizError(40401, "明细不存在", http_status=404)
+    db.delete(bd)
+    record(db, "QUOTE_UPDATE", actor=user, object_type="quote", object_id=quote_id,
+           summary=f"报价 #{quote_id} 删除构成明细 {bd.store_name}",
+           ip=request.client.host if request.client else None)
+    db.commit()
+    return ok({"success": True})

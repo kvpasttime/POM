@@ -33,7 +33,7 @@
         </el-form-item>
         <el-alert v-if="errorMsg" :title="errorMsg" type="error" :closable="false" />
       </el-form>
-      <div class="footer">v1.0 · 仅限授权用户使用</div>
+      <div class="footer">v{{ APP_VERSION }} · 仅限授权用户使用</div>
     </el-card>
   </div>
 </template>
@@ -43,6 +43,7 @@ import { onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { User, Lock } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth'
+import { APP_VERSION } from '../utils/format'
 
 const router = useRouter()
 const route = useRoute()

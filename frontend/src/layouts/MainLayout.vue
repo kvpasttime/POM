@@ -34,7 +34,7 @@
           </template>
         </el-menu>
       </el-scrollbar>
-      <div class="sidebar-foot">v1.0 · MVP</div>
+      <div class="sidebar-foot">v{{ APP_VERSION }}</div>
     </el-aside>
 
     <el-container class="right">
@@ -76,6 +76,7 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Search, Upload, Folder, User, Document, Box, ArrowDown, SwitchButton } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth'
+import { APP_VERSION } from '../utils/format'
 
 const route = useRoute()
 const router = useRouter()

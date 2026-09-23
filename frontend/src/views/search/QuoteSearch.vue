@@ -48,6 +48,9 @@
         <el-table-column prop="spec_model" label="规格型号" min-width="150" show-overflow-tooltip />
         <el-table-column prop="brand" label="品牌" width="90" />
         <el-table-column prop="supplier_name" label="供应商" min-width="130" show-overflow-tooltip />
+        <el-table-column label="报价人" width="80">
+          <template #default="{ row }">{{ fmtQuoter(row.quoter) }}</template>
+        </el-table-column>
         <el-table-column label="金额(元)" width="110" align="right">
           <template #default="{ row }"><span class="amount-cell">{{ fmtAmount(row.amount) }}</span></template>
         </el-table-column>
@@ -92,7 +95,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { searchQuotes, supplierOptions, unitOptions } from '../../api/quote'
-import { fmtAmount, QUOTE_STATUS_MAP } from '../../utils/format'
+import { fmtAmount, fmtQuoter, QUOTE_STATUS_MAP } from '../../utils/format'
 
 const router = useRouter()
 const route = useRoute()

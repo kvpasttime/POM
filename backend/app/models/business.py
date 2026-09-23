@@ -3,7 +3,6 @@
 from datetime import datetime
 
 from sqlalchemy import func
-from sqlalchemy import func
 from sqlalchemy import (
     BigInteger, String, Integer, Text, DateTime, Date, Boolean, Numeric,
     ForeignKey, Index, JSON,
@@ -92,6 +91,7 @@ class Quote(Base, CommonMixin, VersionMixin):
     supplier_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("supplier.id"), nullable=True, index=True
     )
+    quoter: Mapped[str | None] = mapped_column(String(64), nullable=True)  # 报价人（组标签，如“曾”，可手工补全）
     amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True, index=True)
     currency: Mapped[str] = mapped_column(String(8), nullable=False, default="CNY")
     tax_included: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
@@ -119,3 +119,25 @@ class Quote(Base, CommonMixin, VersionMixin):
     group_label: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     __table_args__ = (Index("idx_quote_batch", "import_batch_id"),)
+
+
+class QuoteBreakdown(Base):
+    """报价构成明细：一条报价（报价人组合采购）内的各来源店/分项金额。
+
+    导入时自动预填（店名识别得到、金额配对不明留空），人工在详情页核对补齐。
+    """
+    __tablename__ = "quote_breakdown"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    quote_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("quote.id"), nullable=False, index=True)
+    store_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
+    note: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="needs_review")  # needs_review/confirmed
+    created_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (Index("idx_breakdown_quote", "quote_id"),)

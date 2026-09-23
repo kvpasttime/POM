@@ -9,13 +9,14 @@ from __future__ import annotations
 import datetime as _dt
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 
 from app.importers.detect import find_template_date
 from app.importers.extract import (
     extract_amount, extract_channel, extract_phone, extract_tax_freight,
     extract_vendor, is_no_price_text, is_price_context, normalize_supplier_key,
-    split_material_desc, to_number,
+    split_material_desc, to_number, VENDOR_HINTS,
 )
 from app.importers.mapping import auto_map, normalize_header
 from app.importers.reader import SheetMatrix, parse_date_value
@@ -36,6 +37,7 @@ class QuoteParse:
     remark: str | None = None
     group_label: str | None = None
     business_dup: bool = False
+    breakdowns: list[dict] = field(default_factory=list)  # 报价构成明细预填 {store_name, amount, note}
 
 
 @dataclass
@@ -345,31 +347,67 @@ def _split_trailing_groups(
 
 
 def _parse_group(label: str, texts: list[str]) -> QuoteParse | None:
+    """解析一个横向报价组（报价人视角：一个报价人给出的一条综合报价）。
+
+    组语义（2026-09-23 与业务对齐）：标签列（刘/曾/胡）是**报价人**；
+    组内可能是报价人在多家店组合采购的结果：
+    - 店名候选按"行"识别（命中店铺特征词的行）——同格内斜杠分隔视为一家店
+    - 组合明细预填进 quote.breakdowns（金额配对不明的留空，人工核对）
+    - 金额仍取组内第一个数字（组合总价），状态=待确认（配对不划入结构化）
+    """
     joined = "\n".join(texts)
     phone = extract_phone(joined)
-    vendor = None
+
+    # 店名候选：按行级扫描命中店铺特征词的行（避免同格斜杠分隔误判成多家）
+    vendors: list[str] = []
     for t in texts:
-        vendor = extract_vendor(t)
-        if vendor:
-            break
+        for line in re.split(r"[\n]+", t):
+            line = line.strip()
+            if len(line) >= 4 and any(h in line for h in VENDOR_HINTS) and line not in vendors:
+                vendors.append(line)
+    vendor = vendors[0] if vendors else None
+
     amount, confident = extract_amount(joined)
     tax, freight = extract_tax_freight(joined)
     channel = extract_channel(joined)
     remark = joined
 
+    # 报价构成明细预填（组合采购语义）
+    breakdowns: list[dict] = []
+    for v in vendors:
+        breakdowns.append({"store_name": v, "amount": None, "note": None})
+    if len(vendors) >= 2:
+        combo_note = f"报价人 {label} 组合采购：识别到 {len(vendors)} 家来源店，金额配对待人工核对"
+    elif vendors and amount is not None:
+        breakdowns[0]["amount"] = amount
+        breakdowns[0]["note"] = None
+    elif vendors and amount is None:
+        breakdowns[0]["note"] = "识别到店名但未提取到金额，请人工补充"
+
     if is_no_price_text(joined) and amount is None:
-        return QuoteParse(
+        qp = QuoteParse(
             supplier_name=vendor, supplier_phone=phone, channel=channel,
             status="no_valid_price", remark=remark, group_label=label,
+            breakdowns=breakdowns,
         )
+        return _postprocess(qp, breakdowns, amount, vendors)
     if amount is None and not vendor and not phone:
         return None
-    status = "auto_extracted" if (amount is not None and confident and (vendor or phone)) else "needs_review"
-    return QuoteParse(
+    status = "auto_extracted" if (amount is not None and confident and (vendor or phone) and len(vendors) <= 1) else "needs_review"
+    qp = QuoteParse(
         amount=amount, tax_included=tax, freight_included=freight, channel=channel,
         supplier_name=vendor, supplier_phone=phone, status=status, remark=remark,
-        group_label=label,
+        group_label=label, breakdowns=breakdowns,
     )
+    return _postprocess(qp, breakdowns, amount, vendors)
+
+
+def _postprocess(qp: QuoteParse, breakdowns: list[dict], amount, vendors: list[str]) -> QuoteParse:
+    """统一处理组合采购子状态：多店→needs_review；amount 空的明细补齐逻辑"""
+    if len(vendors) >= 2 and amount is not None:
+        # 组合报价：主报金额标待确认，明细店名全量预填，理由给详情页人工核对
+        qp.status = "needs_review"
+    return qp
 
 
 def parse_sheet_rows(

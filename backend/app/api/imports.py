@@ -13,6 +13,7 @@ from app.core.response import BizError, ok
 from app.core.security import sha256_bytes
 from app.importers import engine
 from app.models.business import Material, PurchaseRequirement, Quote, SourceRowSnapshot, Supplier
+from app.models.business import QuoteBreakdown
 from app.models.ops import ImportBatch, ImportRowResult, MappingTemplate, SourceFile
 from app.models.user import SysUser
 from app.services.audit_service import record
@@ -282,6 +283,7 @@ def _commit_file(db: DbSession, user: SysUser, batch: ImportBatch, sf: SourceFil
                     material_id=material.id,
                     requirement_id=requirement.id,
                     supplier_id=supplier.id if supplier else None,
+                    quoter=q.group_label,  # 报价人（组合采购语义）
                     amount=q.amount,
                     tax_included=q.tax_included,
                     freight_included=q.freight_included,
@@ -297,6 +299,13 @@ def _commit_file(db: DbSession, user: SysUser, batch: ImportBatch, sf: SourceFil
                 )
                 db.add(quote)
                 db.flush()
+                # 报价构成明细（组合采购）：引擎预填；未给则按主体单条兜底
+                bds = q.breakdowns or [{"store_name": q.supplier_name or "待确认",
+                                        "amount": q.amount, "note": None}]
+                for bd in bds:
+                    db.add(QuoteBreakdown(
+                        quote_id=quote.id, store_name=bd.get("store_name") or "待确认",
+                        amount=bd.get("amount"), note=bd.get("note"), created_by=user.id))
                 quote_ids.append(quote.id)
                 if needs_review:
                     totals["needs_review"] += 1

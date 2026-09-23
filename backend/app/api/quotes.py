@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """查询与追溯接口（docs/05 4.2）"""
 import os
 
@@ -11,7 +11,7 @@ from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.response import BizError, ok
-from app.models.business import Material, PurchaseRequirement, Quote, SourceRowSnapshot, Supplier
+from app.models.business import Material, PurchaseRequirement, Quote, QuoteBreakdown, SourceRowSnapshot, Supplier
 from app.models.ops import ImportBatch, SourceFile
 from app.models.user import SysUser
 from app.services.audit_service import record
@@ -140,6 +140,7 @@ def search_quotes(
             "id": it.id,
             "row_type": "quote",
             "requirement_id": it.requirement_id,
+            "quoter": it.quoter,
             "material_name": m.name if m else None,
             "material_code": m.code if m else None,
             "spec_model": m.spec_model if m else None,
@@ -255,6 +256,7 @@ def quote_detail(quote_id: int, user: SysUser = Depends(get_current_user),
     data = {
         "id": quote.id,
         "version": quote.version,
+        "quoter": quote.quoter,
         "material": {
             "code": m.code, "name": m.name, "category": m.category,
             "spec_model": m.spec_model, "tech_params": m.tech_params,
@@ -305,12 +307,19 @@ def quote_detail(quote_id: int, user: SysUser = Depends(get_current_user),
                         Quote.id != quote.id, Quote.status != "deleted")
                 .all())
     data["sibling_quotes"] = [
-        {"id": b.id, "group_label": b.group_label,
+        {"id": b.id, "group_label": b.group_label, "quoter": b.quoter,
          "supplier_name": (db.query(Supplier).filter(Supplier.id == b.supplier_id).first().name
                            if b.supplier_id else "待确认"),
          "amount": float(b.amount) if b.amount is not None else None, "status": b.status}
         for b in siblings
     ]
+
+    data["breakdowns"] = [{
+        "id": b.id, "store_name": b.store_name,
+        "amount": float(b.amount) if b.amount is not None else None,
+        "note": b.note, "status": b.status,
+    } for b in db.query(QuoteBreakdown).filter(QuoteBreakdown.quote_id == quote.id)
+      .order_by(QuoteBreakdown.id).all()]
 
     if masked and s is not None:
         record(db, "SENSITIVE_VIEW", actor=user, object_type="quote", object_id=quote.id,

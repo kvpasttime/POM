@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     app_name: str = "POM 历史采购报价查询系统"
-    version: str = "1.0.0"
+    version: str = "0.1.0.20260923"
     # SQLite 开发 / PostgreSQL 生产（ADR-005）
     database_url: str = "sqlite:///./pom.db"
     # JWT 签名密钥（生产必须由 .env 提供）

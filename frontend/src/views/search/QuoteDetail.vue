@@ -6,10 +6,16 @@
     </el-breadcrumb>
 
     <el-card shadow="never" class="summary">
+      <div class="top-row">
+        <el-button @click="goBack"><el-icon><Back /></el-icon>&nbsp;返回</el-button>
+        <el-button v-if="canReview && data?.quote?.status === 'needs_review'" type="success"
+                   @click="confirmReview"><el-icon><CircleCheck /></el-icon>&nbsp;核对此报价</el-button>
+      </div>
       <div class="summary-main">
         <span class="name">{{ data?.material?.name || '—' }}</span>
         <span class="sep">·</span><span>{{ data?.material?.spec_model || '—' }}</span>
         <span class="sep">·</span><span>{{ data?.supplier?.name || '待确认' }}</span>
+        <span class="sep">·</span><span class="quoter" v-if="data?.quoter">报价人 {{ fmtQuoter(data.quoter) }}</span>
         <span class="sep">·</span><span class="amount">¥{{ fmtAmount(data?.quote?.amount) }}</span>
         <span class="sep">·</span><span>{{ fmtDate(data?.quote?.quote_date) }}</span>
       </div>
@@ -40,6 +46,54 @@
 
     <el-card shadow="never">
       <el-tabs>
+        <el-tab-pane label="报价构成">
+          <el-alert v-if="breakdownCount > 1" type="warning" :closable="false" class="bd-alert"
+                    :title="`组合采购报价：识别到 ${breakdownCount} 家来源店，金额配对需人工核对补齐（Σ明细与总价对不上也算待核对）`" />
+          <el-table :data="data?.breakdowns || []" size="small">
+            <el-table-column prop="store_name" label="来源店铺" min-width="180" show-overflow-tooltip>
+              <template #default="{ row }">
+                <el-input v-if="isMaintainer && editing === row.id" v-model="rowEdit.store_name" size="small" />
+                <span v-else>{{ row.store_name }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="分项金额" width="140">
+              <template #default="{ row }">
+                <el-input-number v-if="isMaintainer && editing === row.id"
+                                 v-model="rowEdit.amount" :min="0" :controls="false" :precision="2" size="small" />
+                <span v-else>{{ fmtAmount(row.amount) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="说明" min-width="160" show-overflow-tooltip>
+              <template #default="{ row }">
+                <el-input v-if="isMaintainer && editing === row.id" v-model="rowEdit.note" size="small" />
+                <span v-else>{{ row.note || '—' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" width="90">
+              <template #default="{ row }">
+                <el-tag :type="row.status === 'confirmed' ? 'success' : 'warning'" size="small">
+                  {{ row.status === 'confirmed' ? '已确认' : '待核对' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column v-if="isMaintainer" label="" width="180">
+              <template #default="{ row }">
+                <template v-if="editing === row.id">
+                  <el-button link type="primary" @click="saveRow(row)">保存</el-button>
+                  <el-button link @click="editing = null">取消</el-button>
+                </template>
+                <template v-else>
+                  <el-button link type="primary" @click="beginEdit(row)">编辑</el-button>
+                  <el-button link type="danger" @click="deleteRow(row)">删除</el-button>
+                </template>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div v-if="isMaintainer" class="bd-add">
+            <el-button size="small" @click="beginAdd"><el-icon><Plus /></el-icon> 添加明细</el-button>
+          </div>
+        </el-tab-pane>
+
         <el-tab-pane label="物料与需求">
           <el-descriptions :column="2" border v-if="data?.material">
             <el-descriptions-item label="物料编码">{{ data.material.code || '—' }}</el-descriptions-item>
@@ -148,13 +202,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowDown, Download } from '@element-plus/icons-vue'
+import { ArrowDown, Back, CircleCheck, Download, Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { quoteDetail, quoteRevisions, deleteQuote, markStatus, fileDownloadUrl } from '../../api/quote'
+import { addBreakdown, patchBreakdown, deleteBreakdown, patchQuote } from '../../api/maintenance'
 import { useAuthStore } from '../../stores/auth'
-import { fmtAmount, fmtDate, fmtDateTime, QUOTE_STATUS_MAP } from '../../utils/format'
+import { fmtAmount, fmtDate, fmtDateTime, fmtQuoter, QUOTE_STATUS_MAP } from '../../utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -168,8 +223,57 @@ const isMaintainer = computed(() => auth.user && ['maintainer', 'admin'].include
 const statusLabel = computed(() => QUOTE_STATUS_MAP[data.value?.quote?.status]?.label || data.value?.quote?.status)
 const statusTag = computed(() => QUOTE_STATUS_MAP[data.value?.quote?.status]?.tag || 'info')
 const masked = computed(() => data.value?.masked_fields || [])
-
+const canReview = computed(() => isMaintainer.value && data.value?.quote?.status !== 'deleted')
+const breakdownCount = computed(() => (data.value?.breakdowns || []).length)
 const yn = (v: boolean | null | undefined) => (v === true ? '是' : v === false ? '否' : '—')
+
+const editing = ref<number | null>(null)
+const rowEdit = reactive<any>({ store_name: '', amount: null, note: '' })
+
+function goBack() {
+  if (window.history.length > 1) router.back()
+  else router.push('/search')
+}
+
+async function confirmReview() {
+  const { value } = await ElMessageBox.prompt(
+    '请输入核对结论（将记入修订记录）：', '核对此报价', { inputValue: '对照原文件核实无误' })
+  await markStatus(quoteId.value, 'confirmed', value)
+  ElMessage.success('已核对确认')
+  load()
+}
+
+function beginEdit(row: any) {
+  editing.value = row.id
+  rowEdit.store_name = row.store_name
+  rowEdit.amount = row.amount
+  rowEdit.note = row.note
+}
+
+async function beginAdd() {
+  const { value } = await ElMessageBox.prompt('来源店铺名称', '添加报价构成明细', { inputValue: '' })
+  const name = (value || '').trim()
+  if (!name) return
+  await addBreakdown(quoteId.value, { store_name: name, amount: null, note: null })
+  ElMessage.success('已添加，请编辑金额后确认')
+  load()
+}
+
+async function saveRow(row: any) {
+  await patchBreakdown(quoteId.value, row.id, {
+    store_name: rowEdit.store_name, amount: rowEdit.amount, note: rowEdit.note,
+  })
+  editing.value = null
+  ElMessage.success('明细已更新并确认')
+  load()
+}
+
+async function deleteRow(row: any) {
+  await ElMessageBox.confirm(`删除明细「${row.store_name}」？`, '确认', { type: 'warning' })
+  await deleteBreakdown(quoteId.value, row.id)
+  ElMessage.success('已删除')
+  load()
+}
 
 async function load() {
   loading.value = true

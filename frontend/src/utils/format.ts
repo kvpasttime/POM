@@ -24,6 +24,14 @@ export function maskPhone(v: string | null | undefined): string {
   return '****'
 }
 
+export const APP_VERSION = '0.1.0.20260923'
+
+/** 报价人显示：单字姓补齐 XX（用户约定），完整人名原样 */
+export function fmtQuoter(v: string | null | undefined): string {
+  if (!v) return '—'
+  return v.length === 1 ? `${v}XX` : v
+}
+
 export const QUOTE_STATUS_MAP: Record<string, { label: string; tag: string }> = {
   confirmed: { label: '已确认', tag: 'success' },
   auto_extracted: { label: '自动识别', tag: 'info' },
