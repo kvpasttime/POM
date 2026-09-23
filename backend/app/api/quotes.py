@@ -101,7 +101,8 @@ def search_quotes(
                 Material.name.like(like), Material.code.like(like),
                 Material.spec_model.like(like), Material.tech_params.like(like),
                 Material.part_no.like(like), Material.material_text.like(like),
-                Material.brand.like(like), Supplier.name.like(like),
+                Material.brand.like(like), Material.name_raw.like(like),
+                Supplier.name.like(like),
                 Quote.remark.like(like), Quote.source_remark.like(like),
             ]
             q = q.filter(or_(*conds))  # R-QRY-01 多词 AND
@@ -185,7 +186,8 @@ def _search_requirement_items(db: DbSession, words: list[str],
                 Material.name.like(like), Material.code.like(like),
                 Material.spec_model.like(like), Material.tech_params.like(like),
                 Material.part_no.like(like), Material.material_text.like(like),
-                Material.brand.like(like), PurchaseRequirement.remark.like(like),
+                Material.brand.like(like), Material.name_raw.like(like),
+                PurchaseRequirement.remark.like(like),
                 PurchaseRequirement.receiver.like(like),
             ]
             q = q.filter(or_(*conds))
