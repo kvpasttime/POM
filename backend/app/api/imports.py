@@ -199,9 +199,11 @@ def commit_import(batch_id: int, body: CommitBody, request: Request,
             if sf is None:
                 raise BizError(30409, f"文件 {fc.file_id} 不属于该批次", http_status=404)
             data = _read_stored(sf)
+            # 提交阶段同样做行级重复检测（防止重复提交同一文件产生重复记录）
             result = engine.build_preview(
                 sf.original_name, data, fc.sheet_name, fc.header_row,
-                [m.model_dump() for m in fc.mappings], set(), set())
+                [m.model_dump() for m in fc.mappings],
+                _existing_row_hashes(db), _existing_business_keys(db))
             _commit_file(db, user, batch, sf, result, fc.skip_error_rows, totals)
         batch.status = "confirmed" if totals["failed"] == 0 else "partial"
         batch.success_count = totals["success"]
@@ -299,12 +301,23 @@ def _commit_file(db: DbSession, user: SysUser, batch: ImportBatch, sf: SourceFil
                 )
                 db.add(quote)
                 db.flush()
-                # 报价构成明细（组合采购）：引擎预填；未给则按主体单条兜底
+                # 报价构成明细（组合采购）：引擎预填；未给则按主体单条兜底；
+                # 同一报价内同店名只保留一条（幂等，防重复插入）
                 bds = q.breakdowns or [{"store_name": q.supplier_name or "待确认",
                                         "amount": q.amount, "note": None}]
+                seen_stores: set[str] = set()
                 for bd in bds:
+                    store = (bd.get("store_name") or "待确认").strip()
+                    if store in seen_stores:
+                        continue
+                    seen_stores.add(store)
+                    exists = db.query(QuoteBreakdown).filter(
+                        QuoteBreakdown.quote_id == quote.id,
+                        QuoteBreakdown.store_name == store).count()
+                    if exists:
+                        continue
                     db.add(QuoteBreakdown(
-                        quote_id=quote.id, store_name=bd.get("store_name") or "待确认",
+                        quote_id=quote.id, store_name=store,
                         amount=bd.get("amount"), note=bd.get("note"), created_by=user.id))
                 quote_ids.append(quote.id)
                 if needs_review:
