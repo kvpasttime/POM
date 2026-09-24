@@ -10,9 +10,33 @@ import re
 # 渠道关键词（PRD 5.4 示例：微信渠道）
 CHANNEL_PATTERNS = [
     ("微信", "微信"), ("淘宝", "淘宝"), ("天猫", "天猫"), ("京东", "京东"),
-    ("1688", "1688"), ("阿里巴巴", "1688"), ("拼多多", "拼多多"), ("电话", "电话"),
-    ("TB", "淘宝"),
+    ("1688", "1688"), ("阿里巴巴", "1688"), ("拼多多", "拼多多"),
+    ("TB", "淘宝"), ("JD", "京东"), ("TM", "天猫"), ("PDD", "拼多多"),
 ]
+
+# 店名尾缀渠道缩写（"影石Insta360官方旗舰店 TB" → 淘宝）
+CHANNEL_SUFFIX_MAP = {
+    "TB": "淘宝", "JD": "京东", "TM": "天猫", "PDD": "拼多多",
+    "TB店": "淘宝", "JD店": "京东", "1688": "1688", "AL": "1688",
+}
+
+
+def strip_channel_suffix(line: str) -> tuple[str, str | None]:
+    """从店名行尾剥离渠道缩写尾缀，返回 (清洗后店名, 渠道)。
+
+    匹配规则：行尾的独立 token（空格/斜杠/分号分隔），大小写不敏感。
+    样例：'影石Insta360官方旗舰店 TB' → ('影石Insta360官方旗舰店', '淘宝')
+    """
+    t = _clean(line)
+    if not t:
+        return t, None
+    tokens = re.split(r"[\s/；;，,]+", t)
+    if len(tokens) >= 2:
+        tail = tokens[-1].upper().strip()
+        if tail in CHANNEL_SUFFIX_MAP:
+            cleaned = " ".join(tokens[:-1]).strip()
+            return cleaned or t, CHANNEL_SUFFIX_MAP[tail]
+    return t, None
 
 # 供应商名特征词（样例2：上海赛博数码/DJI大疆美承专卖店、影石Insta360官方旗舰店）
 VENDOR_HINTS = ["公司", "店", "处", "厂", "商行", "贸易", "科技", "专营", "专卖", "经销", "旗舰店", "有限"]

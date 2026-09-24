@@ -315,7 +315,7 @@ def quote_detail(quote_id: int, user: SysUser = Depends(get_current_user),
     ]
 
     data["breakdowns"] = [{
-        "id": b.id, "store_name": b.store_name,
+        "id": b.id, "store_name": b.store_name, "channel": b.channel,
         "amount": float(b.amount) if b.amount is not None else None,
         "note": b.note, "status": b.status,
     } for b in db.query(QuoteBreakdown).filter(QuoteBreakdown.quote_id == quote.id)

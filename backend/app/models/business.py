@@ -131,6 +131,7 @@ class QuoteBreakdown(Base):
     id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
     quote_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("quote.id"), nullable=False, index=True)
     store_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    channel: Mapped[str | None] = mapped_column(String(16), nullable=True)  # 该店渠道（淘宝/京东…）
     amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
     note: Mapped[str | None] = mapped_column(String(512), nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="needs_review")  # needs_review/confirmed

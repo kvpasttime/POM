@@ -16,7 +16,7 @@ from app.importers.detect import find_template_date
 from app.importers.extract import (
     extract_amount, extract_channel, extract_phone, extract_tax_freight,
     extract_vendor, is_no_price_text, is_price_context, normalize_supplier_key,
-    split_material_desc, to_number, VENDOR_HINTS,
+    split_material_desc, strip_channel_suffix, to_number, VENDOR_HINTS,
 )
 from app.importers.mapping import auto_map, normalize_header
 from app.importers.reader import SheetMatrix, parse_date_value
@@ -358,26 +358,34 @@ def _parse_group(label: str, texts: list[str]) -> QuoteParse | None:
     joined = "\n".join(texts)
     phone = extract_phone(joined)
 
-    # 店名候选：按行级扫描命中店铺特征词的行（避免同格斜杠分隔误判成多家）
-    vendors: list[str] = []
+    # 店名候选：按行级扫描命中店铺特征词的行（避免同格斜杠分隔误判成多家）；
+    # 每家店的渠道尾缀（TB/JD/TM/PDD）从店名剥离并跟随该店
+    vendors: list[str] = []  # (清洗后店名, 渠道) 顺序去重
+    vendor_channels: dict[str, str | None] = {}
     for t in texts:
         for line in re.split(r"[\n]+", t):
             line = line.strip()
-            if len(line) >= 4 and any(h in line for h in VENDOR_HINTS) and line not in vendors:
-                vendors.append(line)
+            if len(line) >= 4 and any(h in line for h in VENDOR_HINTS):
+                clean_name, ch = strip_channel_suffix(line)
+                if len(clean_name) >= 3 and clean_name not in vendors:
+                    vendors.append(clean_name)
+                    vendor_channels[clean_name] = ch
     vendor = vendors[0] if vendors else None
 
     amount, confident = extract_amount(joined)
     tax, freight = extract_tax_freight(joined)
-    channel = extract_channel(joined)
+    # 组合报价（多店）：整条报价不该标单一渠道，渠道随分别明细展示
+    channel = None if len(vendors) >= 2 else (
+        vendor_channels.get(vendor) if vendor else extract_channel(joined))
     remark = joined
 
-    # 报价构成明细预填（组合采购语义）
+    # 报价构成明细预填（组合采购语义，渠道按店）
     breakdowns: list[dict] = []
     for v in vendors:
-        breakdowns.append({"store_name": v, "amount": None, "note": None})
+        breakdowns.append({"store_name": v, "channel": vendor_channels.get(v),
+                           "amount": None, "note": None})
     if len(vendors) >= 2:
-        combo_note = f"报价人 {label} 组合采购：识别到 {len(vendors)} 家来源店，金额配对待人工核对"
+        combo_note = f"报价人 {label} 组合采购：识别到 {len(vendors)} 家来源店，金额与渠道配对待人工核对"
     elif vendors and amount is not None:
         breakdowns[0]["amount"] = amount
         breakdowns[0]["note"] = None

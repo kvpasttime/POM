@@ -50,10 +50,16 @@
           <el-alert v-if="breakdownCount > 1" type="warning" :closable="false" class="bd-alert"
                     :title="`组合采购报价：识别到 ${breakdownCount} 家来源店，金额配对需人工核对补齐（Σ明细与总价对不上也算待核对）`" />
           <el-table :data="data?.breakdowns || []" size="small">
-            <el-table-column prop="store_name" label="来源店铺" min-width="180" show-overflow-tooltip>
+            <el-table-column prop="store_name" label="来源店铺" min-width="170" show-overflow-tooltip>
               <template #default="{ row }">
                 <el-input v-if="isMaintainer && editing === row.id" v-model="rowEdit.store_name" size="small" />
                 <span v-else>{{ row.store_name }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="渠道" width="80">
+              <template #default="{ row }">
+                <el-tag v-if="row.channel" size="small" type="info">{{ row.channel }}</el-tag>
+                <span v-else>—</span>
               </template>
             </el-table-column>
             <el-table-column label="分项金额" width="140">

@@ -318,6 +318,7 @@ def _commit_file(db: DbSession, user: SysUser, batch: ImportBatch, sf: SourceFil
                         continue
                     db.add(QuoteBreakdown(
                         quote_id=quote.id, store_name=store,
+                        channel=bd.get("channel"),
                         amount=bd.get("amount"), note=bd.get("note"), created_by=user.id))
                 quote_ids.append(quote.id)
                 if needs_review:

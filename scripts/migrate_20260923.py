@@ -15,15 +15,19 @@ from sqlalchemy import text  # noqa: E402
 
 with engine.begin() as conn:
     # 幂等加列（PG/SQLite 同语法）
-    try:
-        conn.execute(text("ALTER TABLE quote ADD COLUMN quoter VARCHAR(64)"))
-        print("quote.quoter 列已添加")
-    except Exception as e:
-        msg = str(e).lower()
-        if "duplicate" in msg or "exists" in msg or "already" in msg:
-            print("quote.quoter 已存在，跳过")
-        else:
-            raise
+    for ddl in (
+        "ALTER TABLE quote ADD COLUMN quoter VARCHAR(64)",
+        "ALTER TABLE quote_breakdown ADD COLUMN channel VARCHAR(16)",
+    ):
+        try:
+            conn.execute(text(ddl))
+            print("已执行:", ddl)
+        except Exception as e:
+            msg = str(e).lower()
+            if "duplicate" in msg or "exists" in msg or "already" in msg:
+                print("跳过（已存在）:", ddl)
+            else:
+                raise
 
 Base.metadata.create_all(engine)
 print("表结构就绪（quote_breakdown 由 create_all 保证）")
